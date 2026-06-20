@@ -127,8 +127,8 @@ describe('ResourceListService', () => {
       jest.runAllTimers();
 
       expect(spy).toHaveBeenCalledTimes(2);
-      expect(spy).toHaveBeenCalledWith(42);
-      expect(spy).toHaveBeenCalledWith(7);
+      expect(spy).toHaveBeenCalledWith(42, new Set([10]));
+      expect(spy).toHaveBeenCalledWith(7, new Set([10]));
     });
 
     it('coalesces rapid successive calls into a single send per reader', () => {
@@ -143,9 +143,9 @@ describe('ResourceListService', () => {
 
       jest.runAllTimers();
 
-      // Three calls but the debounce collapses them into one send
+      // Three calls but the debounce collapses them into one send with all resourceIds accumulated
       expect(spy).toHaveBeenCalledTimes(1);
-      expect(spy).toHaveBeenCalledWith(42);
+      expect(spy).toHaveBeenCalledWith(42, new Set([10, 11, 12]));
     });
 
     it('does nothing when there are no sockets', () => {
@@ -169,21 +169,21 @@ describe('ResourceListService', () => {
       expect(socket.sendMessage).not.toHaveBeenCalled();
     });
 
-    it('returns without sending when onlyIfResourceMatches.resourceId is not among reader.resources', async () => {
+    it('returns without sending when onlyIfResourceMatches.resourceIds has no overlap with reader.resources', async () => {
       attractapService.findReaderById.mockResolvedValue(createReaderFixture());
       const socket = createMockSocket();
 
-      await service.sendResourceListToSocket(socket, { resourceId: 999 });
+      await service.sendResourceListToSocket(socket, { resourceIds: new Set([999]) });
 
       expect(socket.sendMessage).not.toHaveBeenCalled();
       expect(resourceUsageService.getActiveSessions).not.toHaveBeenCalled();
     });
 
-    it('sends the resource list when onlyIfResourceMatches.resourceId matches a reader resource', async () => {
+    it('sends the resource list when onlyIfResourceMatches.resourceIds overlaps with reader.resources', async () => {
       attractapService.findReaderById.mockResolvedValue(createReaderFixture());
       const socket = createMockSocket();
 
-      await service.sendResourceListToSocket(socket, { resourceId: 10 });
+      await service.sendResourceListToSocket(socket, { resourceIds: new Set([10]) });
 
       expect(socket.sendMessage).toHaveBeenCalledTimes(1);
     });
@@ -362,7 +362,7 @@ describe('ResourceListService', () => {
       );
     });
 
-    it('proceeds to send when onlyIfResourceMatches is provided without a resourceId', async () => {
+    it('proceeds to send when onlyIfResourceMatches is provided without resourceIds', async () => {
       attractapService.findReaderById.mockResolvedValue(createReaderFixture());
       const socket = createMockSocket();
 

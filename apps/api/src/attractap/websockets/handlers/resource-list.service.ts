@@ -33,15 +33,15 @@ export class ResourceListService {
   @Inject(ResourceFlowsService)
   private resourceFlowsService: ResourceFlowsService;
 
-  private readonly pendingSends = new Map<number, ReturnType<typeof setTimeout>>();
+  private readonly pendingSends = new Map<number, { timer: ReturnType<typeof setTimeout>; resourceIds: Set<number> }>();
 
-  public async sendResourceList(readerId: number) {
+  public async sendResourceList(readerId: number, resourceIds?: Set<number>) {
     const sockets = Array.from(this.websocketService.sockets.values()).filter((socket) => socket.readerId === readerId);
     if (sockets.length === 0) {
       return;
     }
 
-    await Promise.all(sockets.map((socket) => this.sendResourceListToSocket(socket)));
+    await Promise.all(sockets.map((socket) => this.sendResourceListToSocket(socket, resourceIds ? { resourceIds } : undefined)));
   }
 
   public sendResourceListToReadersWithResource(resourceId: number): void {
@@ -51,33 +51,32 @@ export class ResourceListService {
     }
 
     for (const readerId of readerIds) {
-      this.scheduleSend(readerId);
+      this.scheduleSend(readerId, resourceId);
     }
-
-    // Store resourceId context on pending sends so we can skip readers that
-    // don't have the resource.  Because scheduleSend debounces, the reader-level
-    // send (sendResourceList) will re-check resource membership itself at send
-    // time, so no filtering is needed here.
-    void resourceId;
   }
 
-  private scheduleSend(readerId: number): void {
-    const existing = this.pendingSends.get(readerId);
-    if (existing !== undefined) clearTimeout(existing);
+  private scheduleSend(readerId: number, resourceId: number): void {
+    const pending = this.pendingSends.get(readerId);
+    if (pending) {
+      clearTimeout(pending.timer);
+      pending.resourceIds.add(resourceId);
+    }
+
+    const resourceIds = pending?.resourceIds ?? new Set([resourceId]);
 
     const timer = setTimeout(() => {
       this.pendingSends.delete(readerId);
-      this.sendResourceList(readerId).catch((err) => {
+      this.sendResourceList(readerId, resourceIds).catch((err) => {
         this.logger.error(`Failed to send debounced resource list to reader ${readerId}`, err);
       });
     }, DEBOUNCE_MS);
 
-    this.pendingSends.set(readerId, timer);
+    this.pendingSends.set(readerId, { timer, resourceIds });
   }
 
   public async sendResourceListToSocket(
     socket: AuthenticatedWebSocket,
-    onlyIfResourceMatches?: { resourceId?: number },
+    onlyIfResourceMatches?: { resourceIds?: Set<number> },
   ) {
     const reader = await this.attractapService.findReaderById(socket.readerId);
     if (!reader) {
@@ -86,8 +85,8 @@ export class ResourceListService {
 
     const resources = [...reader.resources].sort((a, b) => a.name.localeCompare(b.name));
 
-    if (onlyIfResourceMatches?.resourceId) {
-      if (!resources.some((resource) => resource.id === onlyIfResourceMatches.resourceId)) {
+    if (onlyIfResourceMatches?.resourceIds?.size) {
+      if (!resources.some((resource) => onlyIfResourceMatches.resourceIds!.has(resource.id))) {
         return;
       }
     }
