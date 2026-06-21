@@ -41,7 +41,11 @@ export class ResourceListService {
       return;
     }
 
-    await Promise.all(sockets.map((socket) => this.sendResourceListToSocket(socket, resourceIds ? { resourceIds } : undefined)));
+    await Promise.all(
+      sockets.map((socket) =>
+        resourceIds ? this.sendResourceListToSocket(socket, { resourceIds }) : this.sendResourceListToSocket(socket),
+      ),
+    );
   }
 
   public sendResourceListToReadersWithResource(resourceId: number): void {
@@ -86,7 +90,7 @@ export class ResourceListService {
     const resources = [...reader.resources].sort((a, b) => a.name.localeCompare(b.name));
 
     if (onlyIfResourceMatches?.resourceIds?.size) {
-      if (!resources.some((resource) => onlyIfResourceMatches.resourceIds!.has(resource.id))) {
+      if (!resources.some((resource) => onlyIfResourceMatches.resourceIds?.has(resource.id))) {
         return;
       }
     }
