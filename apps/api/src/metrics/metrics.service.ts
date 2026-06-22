@@ -51,6 +51,9 @@ export class MetricsService implements OnModuleInit {
 
   public readonly pluginsLoaded: Gauge;
 
+  public readonly authorizationCacheRequestsTotal: Counter;
+  public readonly authorizationCacheSize: Gauge;
+
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
@@ -234,6 +237,19 @@ export class MetricsService implements OnModuleInit {
     this.pluginsLoaded = new Gauge({
       name: 'attraccess_plugins_loaded',
       help: 'Number of loaded plugins',
+      registers: [this.registry],
+    });
+
+    this.authorizationCacheRequestsTotal = new Counter({
+      name: 'attraccess_authorization_cache_requests_total',
+      help: 'Total number of canControllResource() authorization cache lookups',
+      labelNames: ['result'],
+      registers: [this.registry],
+    });
+
+    this.authorizationCacheSize = new Gauge({
+      name: 'attraccess_authorization_cache_size',
+      help: 'Current number of entries in the authorization cache',
       registers: [this.registry],
     });
 
